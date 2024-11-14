@@ -6,6 +6,7 @@ import 'nut.dart';
 import 'my.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'login.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,10 +25,19 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'All Care',
       theme: ThemeData(
+        brightness: Brightness.light,
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        // 다크 모드의 다른 테마 설정
+      ),
+      themeMode: ThemeMode.system, // 시스템 설정에 따라 테마 변경
       home: const MyHomePage(),
+      // home: const LoginScreen(),
     );
   }
 }
