@@ -7,6 +7,8 @@ class Todo {
   TimeOfDay? alarmTime;
   String? repeat;
   bool isDone;
+  List<DateTime>? futureDates;
+  List<String> repeatDays;
 
   Todo({
     required this.title,
@@ -15,44 +17,47 @@ class Todo {
     this.alarmTime,
     this.repeat,
     this.isDone = false,
+    this.futureDates,
+    this.repeatDays = const [],
   });
 }
 
-//원본
-//class TodoPage extends StatefulWidget {
-//final DateTime selectedDate;
-
-//TodoPage({required this.selectedDate});
-
-//콜백을 받아들이도록 수정
 class TodoPage extends StatefulWidget {
   final DateTime selectedDate;
   final Function(Todo) onTodoAdded;
   final Function(Todo) onTodoRemoved;
-  final Function(List<Todo>) onTodoListChanged; // 추가
+  final Function(List<Todo>) onTodoListChanged;
 
   TodoPage({
     required this.selectedDate,
     required this.onTodoAdded,
     required this.onTodoRemoved,
-    required this.onTodoListChanged, // 추가
+    required this.onTodoListChanged,
   });
 
   @override
   _TodoPageState createState() => _TodoPageState();
 }
-
 class _TodoPageState extends State<TodoPage> {
-  // 초기 할 일 리스트
   final List<Todo> _todoList = [];
 
   void _updateTodoList() {
-    widget.onTodoListChanged?.call(_todoList); // 수정된 부분: null 체크 후 호출
+    widget.onTodoListChanged(_todoList);
+    // MyHomePage의 상태 업데이트
+    setState(() {}); // 현재 위젯의 상태만 업데이트
+  }
+
+  List<Todo> _getEventsForDay(DateTime day) {
+    return _todoList.where((todo) =>
+    isSameDay(todo.date, day) ||
+        (todo.futureDates?.any((futureDate) => isSameDay(futureDate, day)) ?? false)
+    ).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final filteredTodoList = _todoList.where((todo) => isSameDay(todo.date, widget.selectedDate)).toList();
+    final filteredTodoList = _todoList.where((todo) =>
+        isSameDay(todo.date, widget.selectedDate)).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -68,8 +73,9 @@ class _TodoPageState extends State<TodoPage> {
             onDismissed: (direction) {
               setState(() {
                 _todoList.remove(todo);
+                _generateFutureDates(todo);
+                _addFutureTodos(todo);
               });
-              _updateTodoList(); // 추가
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('${todo.title} 삭제됨')),
               );
@@ -81,13 +87,10 @@ class _TodoPageState extends State<TodoPage> {
               child: Icon(Icons.delete, color: Colors.white),
             ),
             child: ListTile(
-              title: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  todo.title,
-                  style: TextStyle(
-                    decoration: todo.isDone ? TextDecoration.lineThrough : null,
-                  ),
+              title: Text(
+                todo.title,
+                style: TextStyle(
+                  decoration: todo.isDone ? TextDecoration.lineThrough : null,
                 ),
               ),
               trailing: _buildTrailingButtons(todo),
@@ -117,7 +120,6 @@ class _TodoPageState extends State<TodoPage> {
             setState(() {
               todo.isDone = value ?? false;
             });
-            _updateTodoList(); // 추가
           },
         ),
       ],
@@ -126,6 +128,7 @@ class _TodoPageState extends State<TodoPage> {
 
   void _showEditTitleDialog(BuildContext context, Todo todo) {
     TextEditingController _controller = TextEditingController(text: todo.title);
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -146,7 +149,6 @@ class _TodoPageState extends State<TodoPage> {
                 setState(() {
                   todo.title = _controller.text;
                 });
-                _updateTodoList(); // 추가
                 Navigator.of(context).pop();
               },
             ),
@@ -161,52 +163,61 @@ class _TodoPageState extends State<TodoPage> {
       context: context,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       isScrollControlled: true,
-      builder: (context) => FractionallySizedBox(
-        heightFactor: 0.5,
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(todo.title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              SizedBox(height: 10),
-              _buildMemoField(todo),
-              SizedBox(height: 10),
-              _buildAlarmAndRepeatRow(todo),
-              SizedBox(height: 20),
-              _buildCompletionButton(todo),
-              Divider(),
-              _buildDeleteButton(todo),
-            ],
-          ),
-        ),
+      builder: (context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setState) {
+          return FractionallySizedBox(
+            heightFactor: 0.6,
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(todo.title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 10),
+                  _buildMemoField(todo),
+                  SizedBox(height: 10),
+                  _buildAlarmAndRepeatRow(todo),
+                  SizedBox(height: 20),
+                  _buildCompletionButton(todo),
+                  Divider(),
+                  _buildDeleteButton(todo),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
-
   Widget _buildMemoField(Todo todo) {
     return TextFormField(
       initialValue: todo.memo,
-      onChanged: (value) => setState(() {
-        todo.memo = value.trim().isEmpty ? null : value;
-        _updateTodoList(); // 추가
-      }),
+      onChanged: (value) =>
+          setState(() {
+            todo.memo = value
+                .trim()
+                .isEmpty ? null : value;
+          }),
       decoration: InputDecoration(
-        hintText: todo.memo?.isEmpty ?? true ? '메모' : '',
-        hintStyle: TextStyle(color: Colors.grey),
+        hintText: '메모',
         border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       ),
       maxLines: 3,
     );
   }
 
   Widget _buildAlarmAndRepeatRow(Todo todo) {
-    return Row(
+    return Column(
       children: [
-        _buildAlarmOption(todo),
-        SizedBox(width: 10),
-        _buildRepeatOption(todo),
+        Row(
+          children: [
+            _buildAlarmOption(todo),
+            SizedBox(width: 10),
+            _buildRepeatOption(todo),
+          ],
+        ),
+        SizedBox(height: 10),
+        _buildRepeatDaysOption(todo),
       ],
     );
   }
@@ -217,7 +228,9 @@ class _TodoPageState extends State<TodoPage> {
         onTap: () => _selectAlarmTime(context, todo),
         child: _buildOptionBox(
           icon: Icons.alarm,
-          text: todo.alarmTime != null ? '${todo.alarmTime!.hour}:${todo.alarmTime!.minute}' : '알림 없음',
+          text: todo.alarmTime != null
+              ? '${todo.alarmTime!.hour}:${todo.alarmTime!.minute.toString().padLeft(2, '0')}'
+              : '알림 없음',
         ),
       ),
     );
@@ -235,11 +248,132 @@ class _TodoPageState extends State<TodoPage> {
     );
   }
 
+  Widget _buildRepeatDaysOption(Todo todo) {
+    return StatefulBuilder(
+      builder: (BuildContext context, StateSetter setState) {
+        return Wrap(
+          spacing: 8.0,
+          children: ['월', '화', '수', '목', '금', '토', '일'].map((day) {
+            return FilterChip(
+              label: Text(day),
+              selected: todo.repeatDays.contains(day),
+              onSelected: (bool selected) {
+                setState(() {
+                  if (selected) {
+                    todo.repeatDays.add(day);
+                  } else {
+                    todo.repeatDays.remove(day);
+                  }
+                  if (todo.repeatDays.length == 7) {
+                    todo.repeat = '매일';
+                  } else if (todo.repeatDays.isNotEmpty) {
+                    todo.repeat = '매주';
+                  } else {
+                    todo.repeat = null;
+                  }
+                  _generateFutureDates(todo);
+                });
+                // 요일 선택 후 즉시 상태 업데이트
+                _updateTodoList();
+              },
+            );
+          }).toList(),
+        );
+      }
+    );
+  }
+
+  void _selectAlarmTime(BuildContext context, Todo todo) async {
+    TimeOfDay? selectedTime = await showTimePicker(
+      context: context,
+      initialTime: todo.alarmTime ?? TimeOfDay.now(),
+    );
+
+    if (selectedTime != null) {
+      setState(() {
+        todo.alarmTime = selectedTime;
+        _generateFutureDates(todo);
+      });
+      _updateTodoList();
+    }
+  }
+
+  void _selectRepeatOption(BuildContext context, Todo todo) async {
+    String? selectedRepeat = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return SimpleDialog(
+          title: Text('반복 설정'),
+          children: <Widget>[
+            _buildRepeatOptionDialog('반복 안함'),
+            _buildRepeatOptionDialog('매일'),
+            _buildRepeatOptionDialog('매주'),
+            _buildRepeatOptionDialog('매월'),
+          ],
+        );
+      },
+    );
+
+    if (selectedRepeat != null) {
+      setState(() {
+        todo.repeat = selectedRepeat == '반복 안함' ? null : selectedRepeat;
+        if (selectedRepeat == '매일') {
+          todo.repeatDays = ['월', '화', '수', '목', '금', '토', '일'];
+        } else if (selectedRepeat == '반복 안함') {
+          todo.repeatDays = [];
+        }
+        _generateFutureDates(todo);
+      });
+      _updateTodoList();
+    }
+  }
+
+  void _generateFutureDates(Todo todo) {
+    if (todo.repeat == null || todo.alarmTime == null) {
+      todo.futureDates = null;
+      return;
+    }
+
+    List<Todo> futureTodos = [];
+    DateTime currentDate = todo.date.add(Duration(days: 1)); // 다음 날부터 시작
+    for (int i = 0; i < 52; i++) { // 1년치 생성
+      switch (todo.repeat) {
+        case '매일':
+          currentDate = currentDate.add(Duration(days: 1));
+          break;
+        case '매주':
+          do {
+            currentDate = currentDate.add(Duration(days: 1));
+          } while (!todo.repeatDays.contains(['월', '화', '수', '목', '금', '토', '일'][currentDate.weekday - 1]));
+          break;
+        case '매월':
+          currentDate = DateTime(currentDate.year, currentDate.month + 1, currentDate.day);
+          break;
+        default:
+          return; // 알 수 없는 반복 패턴
+      }
+      Todo newTodo = Todo(
+        title: todo.title,
+        date: currentDate,
+        memo: todo.memo,
+        alarmTime: todo.alarmTime,
+        repeat: todo.repeat,
+        repeatDays: todo.repeatDays,
+      );
+      futureTodos.add(newTodo);
+    }
+
+    setState(() {
+      _todoList.addAll(futureTodos);
+    });
+    _updateTodoList();
+  }
+
   Widget _buildOptionBox({required IconData icon, required String text}) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        color: Colors.grey.withOpacity(0.1),
         borderRadius: BorderRadius.circular(5),
       ),
       child: Row(
@@ -259,7 +393,6 @@ class _TodoPageState extends State<TodoPage> {
         setState(() {
           todo.isDone = !todo.isDone;
         });
-        _updateTodoList(); // 추가
         Navigator.pop(context);
       },
       icon: Icon(todo.isDone ? Icons.check_circle : Icons.circle_outlined),
@@ -270,11 +403,48 @@ class _TodoPageState extends State<TodoPage> {
   Widget _buildDeleteButton(Todo todo) {
     return ElevatedButton.icon(
       onPressed: () {
-        setState(() {
-          _todoList.remove(todo);
-        });
-        _updateTodoList(); // 추가
-        Navigator.pop(context);
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Text('할 일 삭제'),
+              content: Text('삭제하시겠습니까?'),
+              actions: [
+                TextButton(
+                  child: Text('취소'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                TextButton(
+                  child: Text('삭제'),
+                  onPressed: () {
+                    setState(() {
+                      _todoList.remove(todo);
+                    });
+                    _updateTodoList();
+                    Navigator.of(context).pop();
+                    Navigator.of(context).pop();
+                  },
+                ),
+                if (todo.repeat != null)
+                  TextButton(
+                    child: Text('일정에서 전체 삭제'),
+                    onPressed: () {
+                      setState(() {
+                        _todoList.removeWhere((t) =>
+                        t.title == todo.title &&
+                            t.repeat == todo.repeat &&
+                            t.alarmTime == todo.alarmTime
+                        );
+                      });
+                      _updateTodoList();
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop();
+                    },
+                  ),
+              ],
+            );
+          },
+        );
       },
       icon: Icon(Icons.delete, color: Colors.red),
       label: Text('삭제'),
@@ -284,42 +454,6 @@ class _TodoPageState extends State<TodoPage> {
     );
   }
 
-  void _selectAlarmTime(BuildContext context, Todo todo) async {
-    TimeOfDay? selectedTime = await showTimePicker(
-      context: context,
-      initialTime: todo.alarmTime ?? TimeOfDay.now(),
-    );
-    if (selectedTime != null) {
-      setState(() {
-        todo.alarmTime = selectedTime;
-      });
-      _updateTodoList(); // 추가
-    }
-  }
-
-  void _selectRepeatOption(BuildContext context, Todo todo) async {
-    String? selectedRepeat = await showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return SimpleDialog(
-          title: Text('반복 설정'),
-          children: <Widget>[
-            _buildRepeatOptionDialog('매일'),
-            _buildRepeatOptionDialog('매주'),
-            _buildRepeatOptionDialog('매년'),
-            _buildRepeatOptionDialog('반복 안함'),
-            _buildRepeatOptionDialog('사용자화'),
-          ],
-        );
-      },
-    );
-    if (selectedRepeat != null) {
-      setState(() {
-        todo.repeat = selectedRepeat;
-      });
-      _updateTodoList(); // 추가
-    }
-  }
 
   SimpleDialogOption _buildRepeatOptionDialog(String option) {
     return SimpleDialogOption(
@@ -349,13 +483,14 @@ class _TodoPageState extends State<TodoPage> {
             TextButton(
               child: Text('추가'),
               onPressed: () {
+                Todo newTodo = Todo(
+                  title: _controller.text,
+                  date: widget.selectedDate,
+                );
                 setState(() {
-                  _todoList.add(Todo(
-                    title: _controller.text,
-                    date: widget.selectedDate,
-                  ));
+                  _todoList.add(newTodo);
                 });
-                _updateTodoList(); // 추가
+                _updateTodoList();
                 Navigator.of(context).pop();
               },
             ),
@@ -364,8 +499,26 @@ class _TodoPageState extends State<TodoPage> {
       },
     );
   }
-}
 
-bool isSameDay(DateTime a, DateTime b) {
-  return a.year == b.year && a.month == b.month && a.day == b.day;
+  void _addFutureTodos(Todo originalTodo) {
+    if (originalTodo.futureDates == null) return;
+
+    for (DateTime futureDate in originalTodo.futureDates!) {
+      Todo newTodo = Todo(
+        title: originalTodo.title,
+        date: futureDate,
+        memo: originalTodo.memo,
+        alarmTime: originalTodo.alarmTime,
+        repeat: originalTodo.repeat,
+      );
+      setState(() {
+        _todoList.add(newTodo);
+      });
+    }
+    _updateTodoList();
+  }
+
+  bool isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
 }
