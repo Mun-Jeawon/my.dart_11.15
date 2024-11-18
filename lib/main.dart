@@ -52,7 +52,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
   CalendarFormat _calendarFormat = CalendarFormat.month;
-  DateTime _focusedDay = DateTime.now();
+  DateTime _focusedDay = DateTime.now(); // 여기에 _focusedDay 추가
   DateTime? _selectedDay;
   List<Todo> _todoList = [];
 
@@ -85,6 +85,14 @@ class _MyHomePageState extends State<MyHomePage> {
       MyPage(todos: _todoList, nutritions: _nutritionList),
     ];
   }
+
+  void _onTodoListChanged(List<Todo> updatedList) {
+    setState(() {
+      _todoList = updatedList;
+      _updateMyPage();
+    });
+  }
+
 
   // Todo 추가 콜백
   void _onTodoAdded(Todo todo) {
@@ -130,9 +138,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   List<Todo> _getEventsForDay(DateTime day) {
-    return _todoList.where((todo) =>
-    isSameDay(todo.date, day) && !todo.isDone
-    ).toList();
+    return _todoList.where((todo) => isSameDay(todo.date, day)).toList();
   }
 
   Widget _buildCalendar() {
@@ -211,23 +217,34 @@ class _MyHomePageState extends State<MyHomePage> {
       calendarBuilders: CalendarBuilders(
         markerBuilder: (context, date, events) {
           if (events.isNotEmpty) {
-            return Positioned(
-              left: 160,
-              bottom: 1,
-              child: Container(
-                padding: EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.green,
-                ),
-                child: Text(
-                  '${events.length}',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                return Positioned(
+                  right: constraints.maxWidth * 0.1, // 날짜 셀 너비의 10% 지점에 위치
+                  top: constraints.maxHeight * 0.1,  // 날짜 셀 높이의 10% 지점에 위치
+                  child: Container(
+                    width: constraints.maxWidth * 0.06,  // 날짜 셀 너비의 10%로 축소
+                    height: constraints.maxWidth * 0.1, // 정사각형 모양 유지
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFFFFA500), // 주황색
+                    ),
+                    child: Center(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${events.length}',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: constraints.maxWidth * 0.1, // 날짜 셀 너비의 6%로 축소
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             );
           }
           return null;
